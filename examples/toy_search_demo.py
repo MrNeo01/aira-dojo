@@ -10,7 +10,8 @@ Two engines are available:
 
 ``lightweight`` (default)
     A dependency-free algorithm microscope that mirrors Greedy, rollout-free
-    MCTS, and island-style Evolutionary search and writes JSON traces.
+    MCTS, island-style Evolutionary search, and FAS Component A and writes JSON
+    traces.
 
 ``dojo``
     Uses the real Dojo solver loops, Node/Journal, metric parsing, and task
@@ -35,7 +36,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Iterable, Sequence
 
-METHODS = ("greedy", "mcts", "evolutionary")
+SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
+
+from dojo.components.component_a.bandit import (  # noqa: E402
+    PhaseAwareFRRUCBPolicy,
+    budget_phase,
+    incumbent_progress_reward,
+)
+
+METHODS = ("greedy", "mcts", "evolutionary", "component_a")
 
 
 def make_target(length: int, seed: int) -> str:
@@ -215,6 +226,56 @@ def run_lightweight_greedy(target: str, budget: int, seed: int) -> ToyTrace:
     return trace
 
 
+def run_lightweight_component_a(target: str, budget: int, seed: int) -> ToyTrace:
+    """Run FAS Component A on the dependency-free toy Journal analogue."""
+
+    trace = ToyTrace("component_a", target, budget, seed)
+    operators = ToyOperators(len(target), seed + 404)
+    parent_rng = random.Random(seed ^ 0xA17A)
+    policy = PhaseAwareFRRUCBPolicy(seed=seed)
+    warm_start = min(3, max(1, budget // 4))
+
+    while trace.remaining:
+        evaluation = trace.evaluations
+        budget_fraction = evaluation / budget
+        incumbent_before = trace.best_score
+        is_warm_start = evaluation < warm_start
+
+        if is_warm_start:
+            phase = budget_phase(budget_fraction, policy.phase_boundaries)
+            operator = "draft"
+        else:
+            eligible = ["draft"]
+            if trace.buggy_leaves:
+                eligible.append("debug")
+            if trace.good_nodes:
+                eligible.append("improve")
+            decision = policy.choose(budget_fraction, eligible)
+            phase = decision.phase
+            operator = decision.operator
+
+        if operator == "draft":
+            trace.add(operators.draft(), operator, (0,))
+        elif operator == "debug":
+            parent = parent_rng.choice(trace.buggy_leaves)
+            trace.add(operators.debug(parent.bits), operator, (parent.node_id,))
+        else:
+            parent = max(
+                trace.good_nodes, key=lambda node: (node.score, -node.node_id)
+            )
+            trace.add(operators.improve(parent.bits or ""), operator, (parent.node_id,))
+
+        if not is_warm_start:
+            reward = incumbent_progress_reward(
+                incumbent_before,
+                trace.best_score,
+                lower_is_better=False,
+                cost=1.0,
+            )
+            policy.observe(phase, operator, reward)
+    return trace
+
+
 def _mcts_utility(
     child: ToyNode,
     parent: ToyNode,
@@ -342,6 +403,7 @@ LIGHTWEIGHT_RUNNERS: dict[str, Callable[[str, int, int], ToyTrace]] = {
     "greedy": run_lightweight_greedy,
     "mcts": run_lightweight_mcts,
     "evolutionary": run_lightweight_evolutionary,
+    "component_a": run_lightweight_component_a,
 }
 
 
@@ -409,6 +471,7 @@ def run_dojo(
     Greedy = SOLVER_MAP["GreedySolverConfig"]
     MCTS = SOLVER_MAP["MCTSSolverConfig"]
     Evolutionary = SOLVER_MAP["EvolutionarySolverConfig"]
+    ComponentA = SOLVER_MAP["ComponentASolverConfig"]
     config_logger(None)
 
     class CandidateBudgetExhausted(RuntimeError):
@@ -553,6 +616,17 @@ def run_dojo(
     class ToyGreedy(ToyOperatorsMixin, Greedy):
         pass
 
+    class ToyComponentA(ToyOperatorsMixin, ComponentA):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.toy_policy_records: list[dict[str, Any]] = []
+
+        def step(self, task: Any, state: Any):
+            result = super().step(task, state)
+            assert self.last_policy_record is not None
+            self.toy_policy_records.append(dict(self.last_policy_record))
+            return result
+
     class ToyMCTS(ToyOperatorsMixin, MCTS):
         toy_node_type = MCTSNode
 
@@ -582,6 +656,7 @@ def run_dojo(
         "greedy": ToyGreedy,
         "mcts": ToyMCTS,
         "evolutionary": ToyEvolutionary,
+        "component_a": ToyComponentA,
     }
 
     def common_cfg(method: str, method_dir: Path) -> SimpleNamespace:
@@ -610,6 +685,18 @@ def run_dojo(
                 num_drafts=min(4, max(1, budget // 4)),
                 debug_prob=1.0,
                 improvement_steps=0,
+            )
+        elif method == "component_a":
+            base.update(
+                num_drafts=min(3, max(1, budget // 4)),
+                debug_prob=0.0,
+                improvement_steps=0,
+                component_a_window_size=8,
+                component_a_decay=0.5,
+                component_a_exploration=0.25,
+                component_a_epsilon=1e-12,
+                component_a_phase_boundaries=[1.0 / 3.0, 2.0 / 3.0],
+                component_a_seed=seed,
             )
         elif method == "mcts":
             base.update(num_children=3, uct_c=0.35)
@@ -674,6 +761,46 @@ def run_dojo(
             "best_node_id": None if best is None else best.id,
             "nodes": nodes,
         }
+        if method == "component_a":
+            records = solver.toy_policy_records
+            warm_start = solver.cfg.num_drafts
+            if len(records) != budget:
+                raise RuntimeError(
+                    f"Component A emitted {len(records)} policy records for {budget} evaluations"
+                )
+            for index, (record, node) in enumerate(
+                zip(records, solver.journal.nodes[1:])
+            ):
+                node_operator = node.operators_used[0]
+                if record["operator"] != node_operator:
+                    raise RuntimeError("Component-A decision and Journal operator disagree")
+                if record["operator"] not in record["eligible_operators"]:
+                    raise RuntimeError("Component A selected an operator outside its mask")
+                expected_warm = index < warm_start
+                if record["warm_start"] != expected_warm:
+                    raise RuntimeError("Component-A warm-start trace is inconsistent")
+                if record["learned_from_transition"] == expected_warm:
+                    raise RuntimeError("Component-A learning flag is inconsistent")
+            retained_events = sum(
+                len(solver.component_a_policy.events(phase))
+                for phase in ("early", "middle", "late")
+            )
+            adaptive_by_phase = {
+                phase: sum(
+                    record["learned_from_transition"] and record["phase"] == phase
+                    for record in records
+                )
+                for phase in ("early", "middle", "late")
+            }
+            expected_retained = sum(
+                min(solver.cfg.component_a_window_size, count)
+                for count in adaptive_by_phase.values()
+            )
+            if retained_events != expected_retained:
+                raise RuntimeError(
+                    "Component-A window events do not match adaptive actions"
+                )
+            exported["policy_records"] = records
         _write_json(output_dir / f"dojo_{method}_trace.json", exported)
         results.append(exported)
     return results

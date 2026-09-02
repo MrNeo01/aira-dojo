@@ -1,5 +1,10 @@
 # Foundation for an adaptive policy on AIRA-dojo
 
+> **Implementation status:** FAS Component A is now implemented. See the
+> [minimum integration plan](./COMPONENT_A_IMPLEMENTATION_PLAN.md) and the
+> [FAS-A implementation guide](./FACTORIZED_ADAPTIVE_SEARCH_COMPONENT_A.md).
+> This document is retained as the design foundation and historical scaffold.
+
 ## Recommendation
 
 Start from a **policy-driven subclass of Greedy**, not from a new end-to-end
@@ -228,7 +233,7 @@ Once the hooks are stable, one solver can express the required variants:
 | Deterministic best-parent control | Best validation for both parent-bearing arms | Fixed Greedy rule |
 | Random control | Best validation | Uniform over feasible arms |
 | Round-robin control | Best validation | Feasible round robin |
-| A-only | Best validation | Future phase-aware bandit |
+| A-only | Best validation | Implemented FAS-A phase-aware FRR-UCB |
 | B-only | Future hindsight-UCB selector | Fixed Greedy rule |
 | A+B | Future hindsight-UCB selector | Future phase-aware bandit |
 
@@ -242,9 +247,9 @@ learn from the warm start while another receives different initial candidates.
 For the strongest control, pre-generate and replay the same warm-start nodes per
 task/seed when feasible.
 
-## Simplest adaptive method to implement next
+## Adaptive precursor used to reach Component A
 
-After Phase-0 checks pass, implement this **Component-A precursor** first:
+The original implementation sequence used this **Component-A precursor** first:
 
 1. Keep `BestValidationSelector` unchanged.
 2. Force the same 2-5 Draft warm start for all policies.
@@ -258,11 +263,10 @@ This is simpler than the hindsight model because it requires no trace training,
 embeddings, model checkpoint, or held-out-task protocol. It also directly tests
 the proposal's claim that useful operators change over the run.
 
-This ordinary sliding-window UCB is the simplest useful engineering test, but it
-is a deliberate simplification of the proposal. The proposed Component A uses
-FRRMAB-style fitness-rate-rank credit with sliding-window UCB. Treat ordinary
-SW-UCB as an ablation/precursor; implement and report the FRRMAB-credit variant
-before calling a result the proposal-faithful Component-A headline.
+This ordinary sliding-window UCB remains a useful ablation, but it is a
+deliberate simplification. The implemented FAS-A layer uses the manuscript's
+FRRMAB-style fitness-rate-rank credit with sliding-window UCB; see the linked
+implementation guide for the current equations and tests.
 
 ## Reward and cost: decide before implementation
 
@@ -515,9 +519,9 @@ clients as the corresponding fixed baselines.
 - multiple seeds;
 - detect a known policy difference above noise.
 
-### M3: Paper-1 Component A
+### M3: Paper-1 Component A (software proof complete)
 
-- ordinary phase-aware SW-UCB precursor, then proposal-faithful FRRMAB
+- ordinary phase-aware SW-UCB precursor, then manuscript-equation FRRMAB
   fitness-rate-rank credit with sliding-window UCB;
 - random and round-robin controls;
 - reward/cost ablations;

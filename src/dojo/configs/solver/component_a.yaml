@@ -1,0 +1,41 @@
+defaults:
+  - memory: simple_memory
+  - memory@debug_memory: debug_memory
+
+_target_: dojo.config_dataclasses.solver.component_a.ComponentASolverConfig
+
+# Reuse the stock Greedy mechanics; only operator allocation changes.
+export_search_results: true
+improvement_steps: 5
+step_limit: 500
+data_preview: false
+execution_timeout: 14400
+time_limit_secs: 86400
+max_debug_depth: ???
+debug_prob: 0.0  # Retained for config compatibility; Component A does not use it.
+num_drafts: ???
+max_llm_call_retries: 3
+use_test_score: false
+use_complexity: false
+
+# FAS Component-A proof-of-concept hyperparameters.
+component_a_window_size: 8
+component_a_decay: 0.5
+component_a_exploration: 0.25
+component_a_epsilon: 1.0e-12
+component_a_phase_boundaries: [0.3333333333333333, 0.6666666666666666]
+component_a_seed: ${metadata.seed}
+
+available_packages:
+  - numpy
+  - pandas
+  - scikit-learn
+  - statsmodels
+  - xgboost
+  - lightgbm
+  - torch
+  - torchvision
+  - torch-geometric
+  - bayesian-optimization
+  - timm
+

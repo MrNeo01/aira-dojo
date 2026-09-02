@@ -7,5 +7,11 @@
 from dojo.solvers.greedy import Greedy
 from dojo.solvers.mcts import MCTS
 from dojo.solvers.evo import Evolutionary
+from dojo.components.component_a.solver import ComponentASolver
 
-SOLVER_MAP = {"GreedySolverConfig": Greedy, "MCTSSolverConfig": MCTS, "EvolutionarySolverConfig": Evolutionary}
+SOLVER_MAP = {
+    "GreedySolverConfig": Greedy,
+    "MCTSSolverConfig": MCTS,
+    "EvolutionarySolverConfig": Evolutionary,
+    "ComponentASolverConfig": ComponentASolver,
+}

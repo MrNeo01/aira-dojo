@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+  - override /interpreter: jupyter
+  - override /solver: mlebench/component_a
+  - override /task: mlebench/aerial-cactus-identification
+  - override /solver/client@solver.operators.analyze.llm.client: litellm_4o
+  - override /solver/client@solver.operators.debug.llm.client: litellm_4o
+  - override /solver/client@solver.operators.draft.llm.client: litellm_4o
+  - override /solver/client@solver.operators.improve.llm.client: litellm_4o
+
+metadata:
+  git_issue_id: fas_component_a_poc
+
+solver:
+  # Root-inclusive: 12 evaluated candidate programs plus the synthetic root.
+  step_limit: 13

@@ -33,6 +33,7 @@ from dojo.utils.code_parsing import parse_json_output
 from dojo.core.solvers.utils.search_exporter import (
     export_search_results,
 )
+from dojo.core.solvers.utils.action_mask import eligible_debug_nodes
 from dojo.core.tasks.constants import (
     EXECUTION_OUTPUT,
     TASK_DESCRIPTION,
@@ -51,6 +52,8 @@ from dojo.utils.state import GreedyState
 
 class Greedy(Solver):
     """Greedy solver."""
+
+    search_method_name = "Greedy"
 
     def __init__(self, cfg: GreedySolverConfig, task_info):
         """
@@ -155,7 +158,7 @@ class Greedy(Solver):
         Returns:
             tuple: Updated state and the best code solution (or None if no valid solution found)
         """
-        self.logger.info("Starting Greedy search")
+        self.logger.info(f"Starting {self.search_method_name} search")
 
         # Create a blank root node to start.
         self.create_root_node()
@@ -183,7 +186,9 @@ class Greedy(Solver):
 
         # Export the search results
         try:
-            export_search_results(self.cfg, self.journal, self.logger, "Greedy")
+            export_search_results(
+                self.cfg, self.journal, self.logger, self.search_method_name
+            )
         except Exception as e:
             self.logger.error(f"Error exporting search results: {e}")
 
@@ -221,9 +226,9 @@ class Greedy(Solver):
         # With probability debug_prob, try to debug a buggy node.
         if random.random() < self.cfg.debug_prob:
             # nodes that are buggy + leaf nodes + debug depth < max debug depth
-            debuggable_nodes = [
-                n for n in self.journal.buggy_nodes if (n.is_leaf and n.debug_depth <= self.cfg.max_debug_depth)
-            ]
+            debuggable_nodes = eligible_debug_nodes(
+                self.journal.buggy_nodes, self.cfg.max_debug_depth
+            )
             if debuggable_nodes:
                 self.logger.info("Search Policy: Debugging a buggy node")
                 return random.choice(debuggable_nodes)

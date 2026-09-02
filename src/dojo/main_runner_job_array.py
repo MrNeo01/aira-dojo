@@ -219,6 +219,15 @@ def main(_cfg: DictConfig):
         for k, v in single_vars_comb.items():
             override_config(runner_cfg, k, v)
 
+        # Hydra interpolation has already been materialized by instantiate().
+        # Preserve Component A's intended link to the run seed during sweeps.
+        if (
+            "metadata.seed" in single_vars_comb
+            and "solver.component_a_seed" not in single_vars_comb
+            and hasattr(runner_cfg.solver, "component_a_seed")
+        ):
+            runner_cfg.solver.component_a_seed = runner_cfg.metadata.seed
+
         # runner_cfg.validate()
 
         runner_configs.append(runner_cfg)

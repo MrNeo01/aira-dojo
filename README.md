@@ -19,6 +19,8 @@ The following documentation is available to help you get started with `aira-dojo
 - [Task Development Guide](./docs/TASK_DEVELOPMENT.md) - How to create new tasks
 - [Solver Development Guide](./docs/SOLVER_DEVELOPMENT.md) - How to implement new solvers
 - [Running Experiments](./docs/RUNNING_EXPERIMENTS.md) - How to run experiments with `aira-dojo`
+- [FAS Component-A Plan](./docs/COMPONENT_A_IMPLEMENTATION_PLAN.md) - Minimal adaptive-operator integration plan
+- [FAS Component-A Implementation](./docs/FACTORIZED_ADAPTIVE_SEARCH_COMPONENT_A.md) - Algorithm, code, tests, and usage
 - [Building Superimage](./docs/BUILD_SUPERIMAGE.md) - Instructions for building the superimage container
 
 ## Terminology

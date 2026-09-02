@@ -1,0 +1,16 @@
+defaults:
+  - component_a
+  - /solver/operators/mlebench@operators:
+    - aira_operators/debug
+    - aira_operators/draft
+    - aira_operators/improve
+    - aide_operators/analyze
+  - override memory: simple_memory
+  - override memory@debug_memory: debug_memory
+
+# Keep the controlled AIRA operator family identical to mlebench/greedy.yaml.
+data_preview: true
+max_debug_depth: 20
+num_drafts: 5  # Match mlebench/greedy.yaml for a controlled policy comparison.
+max_llm_call_retries: 3
+use_test_score: false
